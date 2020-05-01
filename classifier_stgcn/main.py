@@ -3,16 +3,16 @@ import os
 import numpy as np
 from utils import loader, processor
 
-
 import torch
 import torchlight
 
 
 base_path = os.path.dirname(os.path.realpath(__file__))
-data_path = os.path.join(base_path, '../data/')
-ftype = ''
+data_path = os.path.join(base_path, '../../data')
+# data_path = os.path.join(base_path)
+ftype = '4DCVAEGCN'
 coords = 3
-joints = 16
+joints = 23
 cycles = 1
 model_path = os.path.join(base_path, 'model_classifier_stgcn/features'+ftype)
 
@@ -65,14 +65,18 @@ parser.add_argument('--work-dir', type=str, default=model_path, metavar='WD',
 args = parser.parse_args()
 device = 'cuda:0'
 
-data, labels = loader.load_data(data_path, ftype, coords, joints, cycles=cycles)
+data, labels, data_train, labels_train, data_test, labels_test = loader.load_data_MPI(data_path, ftype, coords, joints, cycles=cycles)
+# data, labels, data_train, labels_train, data_test, labels_test = loader.load_data(data_path, ftype, coords, joints, cycles=cycles)
+# print(labels)
+cultures = ['Hindi', 'German', 'English']
 num_classes = np.unique(labels).shape[0]
+# print(num_classes, np.unique(labels))
 graph_dict = {'strategy': 'spatial'}
-emotions = ['Angry', 'Neutral', 'Happy', 'Sad']
+# # emotions = ['Angry', 'Neutral', 'Happy', 'Sad']
 
 if args.train:
     test_size = 0.1
-    data, labels, data_train, labels_train, data_test, labels_test = loader.split_data(data, labels, test_size=test_size)
+    # data, labels, data_train, labels_train, data_test, labels_test = loader.split_data(data, labels, test_size=test_size)
     data_loader_train_test = list()
     data_loader_train_test.append(torch.utils.data.DataLoader(
         dataset=loader.TrainTestLoader(data_train, labels_train, joints, coords, num_classes),
@@ -90,14 +94,13 @@ if args.train:
     print('Train set size: {:d}'.format(len(data_train)))
     print('Test set size: {:d}'.format(len(data_test)))
     print('Number of classes: {:d}'.format(num_classes))
-    pr = processor.Processor(args, data_loader_train_test, coords, num_classes, graph_dict, device=device,
-                             verbose=False)
+    pr = processor.Processor(args, data_loader_train_test, coords, num_classes, graph_dict, device=device, verbose=True)
     pr.train()
 else:
     pr = processor.Processor(args, None, coords, num_classes, graph_dict, device=device, verbose=False)
 labels_pred, vecs_pred = pr.generate_predictions(data, num_classes, joints, coords)
 for idx in range(labels_pred.shape[0]):
-    print('{:d}.\t{:s}'.format(idx, emotions[int(labels_pred[idx])]))
+    print('{:d}.\t{:s}'.format(idx, cultures[int(labels_pred[idx])]))
 if args.smap:
     pr.smap()
 if args.save_features:

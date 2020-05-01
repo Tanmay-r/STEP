@@ -6,11 +6,95 @@ import tensorflow as tf
 
 from sklearn.model_selection import train_test_split
 from utils import common
-
+from utils.mocap_dataset import MocapDataset
 # torch
 import torch
 from torchvision import datasets, transforms
+from imblearn.over_sampling import SMOTE
+from collections import Counter
+import operator
 
+# Load data from the MPI dataset
+def load_data_MPI(_path, _ftype, coords, joints, cycles=3):
+
+    # Counts: 'Hindi': 292, 'German': 955, 'English': 200
+    bvhDirectory = os.path.join(_path, "bvh")
+    tagDirectory = os.path.join(_path, "tags")
+
+    data_list = {}
+    num_samples = 0
+    time_steps = 0
+    labels_list = {}
+    fileIDs = []
+    for filenum in range(1, 1452):
+        filename = str(filenum).zfill(6)
+        # print(filenum)
+        if not os.path.exists(os.path.join(tagDirectory, filename + ".txt")):
+            print(os.path.join(tagDirectory, filename + ".txt"), " not found!")
+            continue
+        names, parents, offsets, positions, rotations = MocapDataset.load_bvh(os.path.join(bvhDirectory, filename + ".bvh"))
+        tag, text = MocapDataset.read_tags(os.path.join(tagDirectory, filename + ".txt"))
+        num_samples += 1
+        positions = np.reshape(positions, (positions.shape[0], positions.shape[1]*positions.shape[2]))
+        data_list[filenum] = list(positions)
+        time_steps_curr = len(positions)
+        if time_steps_curr > time_steps:
+            time_steps = time_steps_curr
+        if "Hindi" in tag:
+            labels_list[filenum] = 0
+        elif "German" in tag:
+            labels_list[filenum] = 1
+        elif "English" in tag:
+            labels_list[filenum] = 2
+        else:
+            print("ERROR: ", tag)
+        fileIDs.append(filenum)
+
+    
+    labels = np.empty(num_samples)
+    data = np.empty((num_samples, time_steps*cycles, joints*coords))
+    index = 0
+    for si in fileIDs:
+        data_list_curr = np.tile(data_list[si], (int(np.ceil(time_steps / len(data_list[si]))), 1))
+        if (data_list_curr.shape[1] != 69):
+            continue
+        for ci in range(cycles):
+            data[index, time_steps * ci:time_steps * (ci + 1), :] = data_list_curr[0:time_steps]
+        labels[index] = labels_list[si]
+        index += 1
+    data = data[:index]
+    labels = labels[:index]
+    print(index, num_samples)
+        
+    # data = common.get_affective_features(np.reshape(data, (data.shape[0], data.shape[1], joints, coords)))[:, :, :48]
+    data_train, data_test, labels_train, labels_test = train_test_split(data, labels, test_size=0.1)
+    data_train, labels_train = balance_classes(data_train, labels_train)   
+
+    return data, labels, data_train, labels_train, data_test, labels_test
+
+
+def balance_classes(data_train, labels_train):
+    print("Initial distribution: ", Counter(labels_train))
+    orig_shape = data_train.shape
+    print("Shape of data_train:", orig_shape)
+
+    data_train = np.reshape(data_train, (data_train.shape[0], data_train.shape[1]*data_train.shape[2]))
+    print("Shape of data_train (2D):", data_train.shape)
+
+    sampling_strategy = Counter(labels_train)
+    maxID = max(sampling_strategy.items(), key=operator.itemgetter(1))[0]
+    for key in sampling_strategy:
+        sampling_strategy[key] = sampling_strategy[maxID]
+    print("Expected distribution: ", sampling_strategy)
+
+    sm = SMOTE(sampling_strategy=sampling_strategy)
+    data_train, labels_train = sm.fit_sample(data_train, labels_train)
+    print("Final distribution: ", Counter(labels_train))
+
+    new_shape = (Counter(labels_train)[labels_train[0]]*3, orig_shape[1], orig_shape[2])
+    data_train = np.reshape(data_train, new_shape)
+    print("Shape of data_train (3D):", data_train.shape)
+    return data_train, labels_train
 
 def load_data(_path, _ftype, coords, joints, cycles=3):
 
@@ -31,6 +115,8 @@ def load_data(_path, _ftype, coords, joints, cycles=3):
             time_steps = time_steps_curr
         labels[si] = fl[list(fl.keys())[si]][()]
 
+    print(len(data_list[0]))
+    print(len(data_list[0][0]))
     data = np.empty((num_samples, time_steps*cycles, joints*coords))
     for si in range(num_samples):
         data_list_curr = np.tile(data_list[si], (int(np.ceil(time_steps / len(data_list[si]))), 1))
