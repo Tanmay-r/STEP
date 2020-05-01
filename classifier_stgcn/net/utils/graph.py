@@ -29,13 +29,37 @@ class Graph():
         self.max_hop = max_hop
         self.dilation = dilation
 
-        self.get_edge()
+        self.get_edge_MPI()
         self.hop_dis = get_hop_distance(
             self.num_node, self.edge, max_hop=max_hop)
         self.get_adjacency(strategy)
 
     def __str__(self):
         return self.A
+
+    def get_edge_MPI(self):
+        self.num_node = 23
+        self_link = [(i, i) for i in range(self.num_node)]
+        neighbor_link = [(0, 1), (0, 15), (0, 19),
+                         (1, 2),
+                         (2, 3), 
+                         (3, 4),
+                         (4, 5),(4, 7),(4, 11),
+                         (5, 6),
+                         (7, 8),
+                         (8, 9),
+                         (9, 10),
+                         (11, 12),
+                         (12, 13),
+                         (13, 14),
+                         (15, 16),
+                         (16, 17),
+                         (17, 18),
+                         (19, 20),
+                         (20, 21),
+                         (21, 22)]
+        self.edge = self_link + neighbor_link
+        self.center = 0
 
     def get_edge(self):
         self.num_node = 16

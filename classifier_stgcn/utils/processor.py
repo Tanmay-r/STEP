@@ -5,6 +5,7 @@ import matplotlib as mpl
 import numpy as np
 import torch
 import torchlight
+from torchlight.torchlight.io import IO
 import torch.optim as optim
 import torch.nn as nn
 from matplotlib import colors as mcolors
@@ -222,7 +223,7 @@ class Processor(object):
         self.meta_info = dict(epoch=0, iter=0)
         self.device = device
         self.verbose = verbose
-        self.io = torchlight.IO(
+        self.io = IO(
             self.args.work_dir,
             save_log=self.args.save_log,
             print_log=self.args.print_log)
